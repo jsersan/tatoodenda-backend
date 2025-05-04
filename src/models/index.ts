@@ -1,56 +1,42 @@
-/**
- * Archivo de inicio de modelos
- * Configura Sequelize y establece relaciones entre modelos
- */
+// src/models/index.ts
 import { Sequelize, DataTypes } from 'sequelize';
-import dbConfig from '../config/database';
+import dotenv from 'dotenv';
 
-// Inicializar Sequelize con la configuración
+// Cargar variables de entorno
+dotenv.config();
+
+// Importar definiciones de modelos
+import productModel from './product.model';
+import categoryModel from './category.model';
+// Comentamos esta importación
+// import productColorModel from './product-color.model';
+
+// Crear instancia de Sequelize
 const sequelize = new Sequelize(
-  dbConfig.database,
-  dbConfig.user,
-  dbConfig.password,
+  process.env.DB_NAME!,
+  process.env.DB_USER!,
+  process.env.DB_PASS!, 
   {
-    host: dbConfig.host,
-    dialect: dbConfig.dialect,
-    pool: {
-      max: dbConfig.pool.max,
-      min: dbConfig.pool.min,
-      acquire: dbConfig.pool.acquire,
-      idle: dbConfig.pool.idle
-    },
-    // Solo mostrar logs SQL en desarrollo
-    logging: process.env.NODE_ENV === 'development' ? console.log : false
+    host: process.env.DB_HOST!,
+    dialect: 'mysql',
+    logging: console.log
   }
 );
 
-// Importar definiciones de modelos
-import UserModel from './user.model';
-import CategoryModel from './category.model';
-import ProductModel from './product.model';
-import ProductColorModel from './product-color.model';
-import OrderModel from './order.model';
-import OrderLineModel from './order-line.model';
-
-// Inicializar modelos
+// Crear objeto de base de datos
 const db: any = {
   sequelize,
   Sequelize,
-  User: UserModel(sequelize, DataTypes),
-  Category: CategoryModel(sequelize, DataTypes),
-  Product: ProductModel(sequelize, DataTypes),
-  ProductColor: ProductColorModel(sequelize, DataTypes),
-  Order: OrderModel(sequelize, DataTypes),
-  OrderLine: OrderLineModel(sequelize, DataTypes)
+  Product: productModel(sequelize, DataTypes),
+  Category: categoryModel(sequelize, DataTypes),
+  // No incluimos ProductColor por ahora
 };
 
-// Establecer relaciones entre modelos
-// Esto se hace llamando al método associate que cada modelo define
+// Establecer asociaciones entre modelos
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
     db[modelName].associate(db);
   }
 });
 
-// Exportar el objeto db que contiene todos los modelos y la conexión
 export default db;
