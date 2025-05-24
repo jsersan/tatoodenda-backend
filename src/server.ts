@@ -19,18 +19,26 @@ import { errorHandler } from './utils/error-handler';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar middleware
-// Configurar CORS para permitir solicitudes desde tu aplicación Angular
+// Configurar CORS MÁS PERMISIVO para desarrollo
 app.use(cors({
-  origin: ['http://localhost:4200', 'http://127.0.0.1:4200'], // URLs de tu aplicación Angular
+  origin: ['http://localhost:4200', 'http://127.0.0.1:4200', 'http://localhost:3000'], 
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
+
+// Manejar preflight requests explícitamente
+app.options('*', cors());
 
 // Mostrar las peticiones en la consola (para debugging)
 app.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Body:', req.body);
+  }
   next();
 });
 
@@ -48,36 +56,66 @@ app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'OK', message: 'API funcionando correctamente' });
 });
 
+// Ruta de prueba adicional
+app.get('/test', (req: Request, res: Response) => {
+  res.status(200).json({ message: 'Backend funcionando correctamente' });
+});
+
 // Middleware para manejar rutas no encontradas
 app.use((req: Request, res: Response) => {
+  console.log(`Ruta no encontrada: ${req.method} ${req.url}`);
   res.status(404).json({ message: 'Ruta no encontrada' });
 });
 
 // Middleware para manejo global de errores
 app.use(errorHandler);
 
-// Sincronizar base de datos y arrancar servidor
-db.sequelize.authenticate()
-  .then(() => {
-    console.log('Conexión a la base de datos establecida correctamente');
+// Función para intentar conexión a la base de datos
+const connectDatabase = async () => {
+  try {
+    await db.sequelize.authenticate();
+    console.log('✅ Conexión a la base de datos establecida correctamente');
     
-    app.listen(PORT, () => {
-      console.log(`Servidor ejecutándose en el puerto ${PORT}`);
-      console.log(`Entorno: ${process.env.NODE_ENV}`);
-      console.log(`API disponible en: http://localhost:${PORT}/api`);
-    });
-  })
-  .catch((err: Error) => {
-    console.error('No se pudo conectar a la base de datos:', err.message);
+    // Opcional: Sincronizar modelos (solo en desarrollo)
+    if (process.env.NODE_ENV === 'development') {
+      // await db.sequelize.sync({ alter: true });
+      console.log('📋 Modelos sincronizados con la base de datos');
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('❌ No se pudo conectar a la base de datos:', err);
+    return false;
+  }
+};
+
+// Arrancar servidor
+const startServer = async () => {
+  const dbConnected = await connectDatabase();
+  
+  if (!dbConnected) {
+    console.error('❌ No se puede iniciar el servidor sin conexión a la base de datos');
+    process.exit(1);
+  }
+  
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor ejecutándose en el puerto ${PORT}`);
+    console.log(`📊 Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 API disponible en: http://localhost:${PORT}/api`);
+    console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+    console.log(`🧪 Test endpoint: http://localhost:${PORT}/test`);
   });
+};
+
+// Iniciar servidor
+startServer();
 
 // Manejo de errores no capturados para evitar caídas del servidor
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // En producción, podrías querer reiniciar la aplicación o notificar a un servicio de monitoreo
 });
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  // En producción, lo ideal sería reiniciar la aplicación de forma segura
+  process.exit(1);
 });
