@@ -24,10 +24,15 @@ console.log('🌐 Entorno:', process.env.NODE_ENV || 'development');
 // ✅ Configurar CORS más permisivo para desarrollo
 const corsOptions = {
   origin: [
-    'http://localhost:4200', 
-    'http://127.0.0.1:4200', 
+    'http://localhost:4200',
+    'http://127.0.0.1:4200',
     'http://localhost:3000',
-    'http://localhost:4201' // Por si usas otro puerto
+    'http://localhost:4201',
+    'https://tatoodenda.netlify.app',
+    'http://txemaserrano.com',           // ✅ Añade esto
+    'https://txemaserrano.com',          // ✅ Y esto también
+    'http://www.txemaserrano.com',       // ✅ Por si usas www
+    'https://www.txemaserrano.com'       // ✅ Con https también
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -42,6 +47,7 @@ const corsOptions = {
   preflightContinue: false,
   optionsSuccessStatus: 200
 };
+
 
 app.use(cors(corsOptions));
 
