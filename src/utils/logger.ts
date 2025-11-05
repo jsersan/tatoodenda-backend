@@ -35,15 +35,9 @@ const consoleFormat = winston.format.combine(
 );
 
 // Configuración de transportes para diferentes entornos
-const getTransports = () => {
-  const transports = [
-    // Siempre guardar logs de errores en archivo
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      format: logFormat
-    }),
-  ];
+// Configuración de transportes para diferentes entornos
+const getTransports = (): winston.transport[] => {
+  const transports: winston.transport[] = [];
 
   // En desarrollo, mostrar logs en consola con colores
   if (process.env.NODE_ENV !== 'production') {
@@ -53,14 +47,48 @@ const getTransports = () => {
         format: consoleFormat
       })
     );
+    
+    // En desarrollo también guardar en archivo
+    try {
+      ensureLogDir();
+      transports.push(
+        new winston.transports.File({
+          filename: path.join(logDir, 'error.log'),
+          level: 'error',
+          format: logFormat
+        })
+      );
+    } catch (error) {
+      console.warn('No se pueden crear archivos de log en desarrollo');
+    }
   } else {
-    // En producción, guardar todos los logs en archivo
+    // En producción, usar principalmente consola (Render captura esto)
     transports.push(
-      new winston.transports.File({
-        filename: path.join(logDir, 'combined.log'),
-        format: logFormat
+      new winston.transports.Console({
+        level: 'info',
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          winston.format.json()
+        )
       })
     );
+    
+    // Intentar crear archivo de logs en /tmp si es posible
+    try {
+      ensureLogDir();
+      transports.push(
+        new winston.transports.File({
+          filename: path.join(logDir, 'error.log'),
+          level: 'error',
+          format: logFormat,
+          maxsize: 5242880, // 5MB
+          maxFiles: 2
+        })
+      );
+    } catch (error) {
+      // Si no se puede escribir en disco, solo usar consola
+      console.warn('Logs solo en consola (no se puede escribir en disco)');
+    }
   }
 
   return transports;
@@ -157,3 +185,7 @@ export default {
     return logger.info(message, { user, ...meta });
   }
 };
+
+function ensureLogDir() {
+  throw new Error('Function not implemented.');
+}
