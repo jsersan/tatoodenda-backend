@@ -1,7 +1,7 @@
 {
   "name": "tatoodenda-backend",
   "version": "1.0.0",
-  "description": "Backend para la tienda online Tatoodenda",
+  "description": "Backend optimizado para la tienda online Tatoodenda",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
