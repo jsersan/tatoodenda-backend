@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn src/server.ts",
     "lint": "eslint . --ext .ts",
+    "start:prod": "ts-node src/server.ts",
     "test": "jest"
   },
   "keywords": [
@@ -61,3 +62,4 @@
     "ts-node-dev": "^2.0.0"
   }
 }
+
