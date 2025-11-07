@@ -2,7 +2,6 @@
 node_modules/
 
 # Archivos de compilación
-dist/
 build/
 
 # Archivos de entorno
@@ -52,3 +51,4 @@ uploads/*
 # yarn.lock
 # package-lock.json
 node_modules
+
