@@ -1,4 +1,4 @@
-// src/server.ts - SERVIDOR OPTIMIZADO PARA RENDER
+// src/server.ts - SERVIDOR CON KEEP-ALIVE INTEGRADO
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -8,6 +8,7 @@ import { compressionMiddleware } from './middleware/compression.middleware';
 import routes from './routes';
 import db from './models';
 import { errorHandler } from './middleware/error.middleware';
+import { keepAliveService } from './services/keep-alive.service'; // ✅ NUEVO
 
 dotenv.config();
 
@@ -40,7 +41,7 @@ const corsOptions = {
     'Accept', 
     'Origin',
     'Access-Control-Allow-Headers',
-    'X-Keep-Alive',
+    'X-Keep-Alive', // ✅ Header para keep-alive
     'X-Warm-Up'
   ],
   preflightContinue: false,
@@ -50,14 +51,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// ✅ NUEVO: Compresión HTTP
+// ✅ Compresión HTTP
 app.use(compressionMiddleware);
 
-// ✅ NUEVO: Control de cache
+// ✅ Control de cache
 const cacheControl = (req: Request, res: Response, next: NextFunction) => {
-  // Cache para recursos estáticos
   if (req.url.match(/\.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$/)) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 año
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
   } else if (req.url.startsWith('/api/')) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
@@ -70,8 +70,12 @@ app.use(cacheControl);
 app.use((req: Request, res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   
-  // Solo log en desarrollo o para endpoints críticos
-  if (process.env.NODE_ENV === 'development' || 
+  // Detectar si es un keep-alive ping
+  const isKeepAlive = req.headers['x-keep-alive'] === 'true';
+  
+  if (isKeepAlive) {
+    console.log(`🔄 [${timestamp}] Keep-Alive ping recibido`);
+  } else if (process.env.NODE_ENV === 'development' || 
       req.url.includes('/login') || 
       req.url.includes('/register') ||
       req.url.includes('/pedidos')) {
@@ -89,8 +93,21 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
-// ✅ NUEVO: Health check mejorado (para keep-alive)
+// ✅ HEALTH CHECK MEJORADO (esencial para keep-alive)
 app.get('/health', (req: Request, res: Response) => {
+  const isKeepAlive = req.headers['x-keep-alive'] === 'true';
+  
+  // Si es un ping de keep-alive, respuesta mínima
+  if (isKeepAlive) {
+    return res.status(200).json({ 
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      keepAlive: true
+    });
+  }
+  
+  // Respuesta completa para checks externos
   res.status(200).json({ 
     status: 'OK', 
     message: 'Servidor funcionando',
@@ -101,16 +118,28 @@ app.get('/health', (req: Request, res: Response) => {
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
-    }
+    },
+    keepAliveStats: keepAliveService.getStats()
   });
 });
 
-// ✅ NUEVO: Endpoint para limpiar cache (solo admin)
-app.post('/api/cache/clear', (req: Request, res: Response) => {
-  // TODO: Añadir verificación de admin
-  res.status(200).json({ 
-    message: 'Cache limpiado correctamente',
-    timestamp: new Date().toISOString()
+// ✅ NUEVO: Endpoint para estadísticas de keep-alive
+app.get('/api/keep-alive/stats', (req: Request, res: Response) => {
+  const stats = keepAliveService.getStats();
+  res.status(200).json({
+    success: true,
+    data: stats
+  });
+});
+
+// ✅ NUEVO: Endpoint manual para despertar el servidor (útil desde frontend)
+app.post('/api/wake-up', (req: Request, res: Response) => {
+  console.log('🌅 Wake-up request recibido');
+  res.status(200).json({
+    success: true,
+    message: 'Servidor despierto y listo',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   });
 });
 
@@ -134,6 +163,8 @@ app.get('/', (req: Request, res: Response) => {
     status: 'running',
     endpoints: {
       health: '/health',
+      wakeUp: '/api/wake-up',
+      keepAliveStats: '/api/keep-alive/stats',
       test: '/test',
       api: '/api',
       users: '/api/users',
@@ -144,7 +175,7 @@ app.get('/', (req: Request, res: Response) => {
     optimization: {
       compression: 'enabled',
       cache: 'in-memory',
-      keepAlive: 'enabled'
+      keepAlive: keepAliveService.isRunning() ? 'active' : 'inactive'
     }
   });
 });
@@ -173,7 +204,6 @@ const initializeDatabase = async (maxRetries: number = 3, delay: number = 5000):
       await db.sequelize.authenticate();
       console.log('✅ Conexión a base de datos establecida correctamente');
       
-      // Sincronizar modelos (solo en desarrollo)
       if (process.env.NODE_ENV === 'development') {
         await db.sequelize.sync({ alter: false });
         console.log('✅ Modelos sincronizados');
@@ -193,18 +223,12 @@ const initializeDatabase = async (maxRetries: number = 3, delay: number = 5000):
   return false;
 };
 
-// ✅ Función para detener la verificación de conexión
-const stopConnectionCheck = () => {
-  console.log('🔴 Deteniendo verificación de conexión a la base de datos');
-  // Aquí podrías limpiar cualquier intervalo si lo tuvieras
-};
-
-// ✅ Función de inicio optimizada con reintentos
+// ✅ Función de inicio con keep-alive
 const startServer = async () => {
   try {
     console.log('🚀 Iniciando proceso de arranque del servidor...');
     
-    // 1. Inicializar base de datos con reintentos
+    // 1. Inicializar base de datos
     const dbConnected = await initializeDatabase(3, 5000);
     
     if (!dbConnected) {
@@ -221,27 +245,37 @@ const startServer = async () => {
       console.log(`📊 Entorno: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 URLs disponibles:`);
       console.log(`   • Health check: http://localhost:${PORT}/health`);
+      console.log(`   • Wake up: http://localhost:${PORT}/api/wake-up`);
+      console.log(`   • Keep-Alive stats: http://localhost:${PORT}/api/keep-alive/stats`);
       console.log(`   • Test endpoint: http://localhost:${PORT}/test`);
       console.log(`   • API base: http://localhost:${PORT}/api`);
       console.log(`✨ Optimizaciones activas:`);
       console.log(`   • ✅ Compresión HTTP (gzip)`);
       console.log(`   • ✅ Cache en memoria`);
       console.log(`   • ✅ Pool de conexiones optimizado`);
-      console.log(`   • ✅ Keep-alive endpoint`);
+      
+      // ✅ 3. INICIAR KEEP-ALIVE (solo en producción)
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`   • ✅ Keep-Alive automático`);
+        keepAliveService.start();
+      } else {
+        console.log(`   • ℹ️  Keep-Alive desactivado (desarrollo)`);
+      }
+      
       console.log('🎉 ================================\n');
     });
     
-    // 3. Configurar timeout del servidor (importante para Render)
-    server.timeout = 120000;  // 2 minutos
-    server.keepAliveTimeout = 65000;  // 65 segundos (más que el LB de Render)
-    server.headersTimeout = 66000;  // 66 segundos
+    // 4. Configurar timeout del servidor
+    server.timeout = 120000;
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
     
-    // 4. Configurar manejo de cierre graceful
+    // 5. Configurar cierre graceful
     const gracefulShutdown = (signal: string) => {
       console.log(`\n🔴 Recibida señal ${signal}, cerrando servidor gracefully...`);
       
-      // Detener verificación de DB
-      stopConnectionCheck();
+      // ✅ Detener keep-alive
+      keepAliveService.stop();
       
       server.close(async () => {
         console.log('🔌 Servidor HTTP cerrado');
@@ -257,14 +291,13 @@ const startServer = async () => {
         process.exit(0);
       });
       
-      // Forzar cierre después de 30 segundos
       setTimeout(() => {
         console.error('⚠️ Forzando cierre del servidor...');
         process.exit(1);
       }, 30000);
     };
     
-    // 5. Escuchar señales de cierre
+    // 6. Escuchar señales de cierre
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     
@@ -284,7 +317,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// Iniciar servidor
+// ✅ INICIAR SERVIDOR
 startServer();
 
 export default app;
