@@ -1,0 +1,42 @@
+# Puerto del servidor
+PORT=3000
+
+# Configuración de base de datos
+DB_HOST=qamn130.txemaserrano.com
+DB_USER=qamn130
+DB_NAME=qamn130
+DB_PASS=Jss12aoz
+
+DB_DIALECT=mysql
+DB_POOL_MAX=10
+DB_POOL_MIN=2
+DB_POOL_ACQUIRE=60000
+DB_POOL_IDLE=30000
+
+# ❌ INCORRECTO (esto es un JWT ya firmado, no un secreto):
+# JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# ✅ CORRECTO (una cadena aleatoria larga):
+JWT_SECRET=a3f8d9c2e7b1f4a6c8e2d5b9f3a7c1e4d8b2f6a9c3e7d1b5f8a2c6e9d3b7f1a4c8
+JWT_EXPIRES_IN=24h
+
+# Configuración de entorno
+NODE_ENV=development
+
+# Servidor de email
+EMAIL_PROVIDER=gmail
+EMAIL_USER=u2753640143@gmail.com
+EMAIL_PASSWORD=fkla jlyr szok pbjk
+
+# Configuración de Resend
+RESEND_API_KEY=re_CiaAEfh4_2qiaTkdStrVRA6p5bAcrzjso
+
+# ============================================
+# FRONTEND URL (para CORS y emails)
+# ============================================
+FRONTEND_URL=http://txemaserrano.com/angular/tatoodenda
+
+# ============================================
+# UPLOADS
+# ============================================
+UPLOADS_DIR=./uploads
